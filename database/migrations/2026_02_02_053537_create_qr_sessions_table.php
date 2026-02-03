@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('qr_sessions', function (Blueprint $table) {
+    $table->bigIncrements('id');
+    $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
+    $table->foreignId('restaurant_table_id')->constrained()->cascadeOnDelete();
+    $table->string('session_token')->unique();
+    $table->string('customer_name')->nullable();
+    $table->boolean('is_primary')->default(false);
+    $table->boolean('is_active')->default(true);
+    $table->timestamp('expires_at');
+    $table->timestamps();
+});
+
+
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('qr_sessions');
+    }
+};

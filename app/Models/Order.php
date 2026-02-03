@@ -1,0 +1,47 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Order extends Model
+{
+    protected $fillable = [
+        'restaurant_id',
+        'restaurant_table_id',
+        'qr_session_id',
+        'status',
+        'customer_name',
+        'notes',
+        'subtotal',
+        'tax',
+        'total_amount',
+    ];
+
+    public function restaurant(): BelongsTo
+    {
+        return $this->belongsTo(Restaurant::class);
+    }
+
+    public function table(): BelongsTo
+    {
+        return $this->belongsTo(RestaurantTable::class, 'restaurant_table_id');
+    }
+
+    public function session(): BelongsTo
+    {
+        return $this->belongsTo(QrSession::class, 'qr_session_id');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function payment(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+}
