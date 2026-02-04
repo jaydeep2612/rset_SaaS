@@ -8,10 +8,13 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Scopes\RestaurantScope;
 
 
 class User extends Authenticatable
 {
+    
+    use HasFactory, Notifiable;
     protected $fillable = [
         'restaurant_id',
         'role_id',
@@ -41,6 +44,29 @@ class User extends Authenticatable
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+    
+    /* ---------- ROLE CHECKS ---------- */
+
+    // public function isSuperAdmin() { return $this->role->name === RoleEnum::SUPER_ADMIN->value; }
+    // public function isRestaurantAdmin() { return $this->role->name === RoleEnum::RESTAURANT_ADMIN->value; }
+    // public function isManager() { return $this->role->name === RoleEnum::MANAGER->value; }
+    // public function isChef() { return $this->role->name === RoleEnum::CHEF->value; }
+    // public function isWaiter() { return $this->role->name === RoleEnum::WAITER->value; }
+
+     public function isSuperAdmin(): bool
+    {
+        return (bool) $this->is_super_admin;
+    }
+
+    public function isRestaurantAdmin(): bool
+    {
+        return $this->role?->name === 'restaurant_admin';
+    }
+
+    public function isManager(): bool
+    {
+        return $this->role?->name === 'manager';
     }
 }
 
