@@ -15,6 +15,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use Filament\Forms\Components\Placeholder;
 
 class UserResource extends Resource
 {
@@ -34,6 +35,24 @@ class UserResource extends Resource
             || auth()->user()->isRestaurantAdmin()
             || auth()->user()->isManager()
         );
+    }
+    protected static function getRestaurantStats(): array
+    {
+        $user = auth()->user();
+
+        if ($user->isSuperAdmin()) {
+            return [
+                'count' => null,
+                'limit' => null,
+            ];
+        }
+
+        $restaurant = $user->restaurant;
+
+        return [
+            'count' => $restaurant->users()->count(),
+            'limit' => $restaurant->user_limits,
+        ];
     }
 
     /* ---------------------------------------------------
@@ -56,50 +75,84 @@ class UserResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            // Name
-            Forms\Components\TextInput::make('name')
-                ->required()
-                ->maxLength(255),
 
-            // Email
-            Forms\Components\TextInput::make('email')
-                ->email()
-                ->required()
-                ->unique(ignoreRecord: true),
+        /* =========================
+           RESTAURANT FIELD
+        ========================== */
 
-            // Password (create only)
-            Forms\Components\TextInput::make('password')
-                ->password()
-                ->required(fn ($operation) => $operation === 'create')
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
-                ->dehydrated(fn ($state) => filled($state)),
+        Forms\Components\Select::make('restaurant_id')
+            ->label('Restaurant')
+            ->options(Restaurant::pluck('name', 'id'))
+            ->searchable()
+            ->reactive() // ✅ VERY IMPORTANT
+            ->visible(fn () => auth()->user()->isSuperAdmin())
+            ->required(fn () => auth()->user()->isSuperAdmin()),
 
-            /* =========================
-               RESTAURANT FIELD
-            ========================== */
+        /* =========================
+           USER LIMIT STATS
+        ========================== */
 
-            Forms\Components\Select::make('restaurant_id')
-                ->label('Restaurant')
-                ->options(Restaurant::pluck('name', 'id'))
-                ->visible(fn () => auth()->user()->isSuperAdmin())
-                ->required(fn () => ! auth()->user()->isSuperAdmin()),
+        Placeholder::make('restaurant_user_stats')
+            ->label('Restaurant User Usage')
+            ->reactive() // ✅ VERY IMPORTANT
+            ->content(function (callable $get) {
 
-            // Forms\Components\Hidden::make('restaurant_id')
-            //     ->default(fn () => auth()->user()->restaurant_id)
-            //     ->visible(fn () => ! auth()->user()->isSuperAdmin()),
+                $authUser = auth()->user();
 
-            /* =========================
-               ROLE FIELD
-            ========================== */
+                // 🟢 Super Admin
+                if ($authUser->isSuperAdmin()) {
+                    $restaurantId = $get('restaurant_id');
 
-            Forms\Components\Select::make('role_id')
-                ->label('Role')
-                ->required()
-                ->options(fn () => self::availableRoles()),
+                    if (! $restaurantId) {
+                        return 'Select a restaurant to see user usage.';
+                    }
 
-            Forms\Components\Toggle::make('is_active')
-                ->default(true),
-        ]);
+                    $restaurant = Restaurant::withCount('users')->find($restaurantId);
+
+                    if (! $restaurant) {
+                        return 'Restaurant not found.';
+                    }
+
+                    return "{$restaurant->users_count} / {$restaurant->user_limits} users used";
+                }
+
+                // 🟢 Restaurant Admin / Manager
+                $restaurant = $authUser->restaurant;
+
+                if (! $restaurant) {
+                    return 'No restaurant assigned.';
+                }
+
+                return "{$restaurant->users()->count()} / {$restaurant->user_limits} users used";
+            }),
+
+        /* =========================
+           USER FIELDS
+        ========================== */
+
+        Forms\Components\TextInput::make('name')
+            ->required()
+            ->maxLength(255),
+
+        Forms\Components\TextInput::make('email')
+            ->email()
+            ->required()
+            ->unique(ignoreRecord: true),
+
+        Forms\Components\TextInput::make('password')
+            ->password()
+            ->required(fn ($operation) => $operation === 'create')
+            ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
+            ->dehydrated(fn ($state) => filled($state)),
+
+        Forms\Components\Select::make('role_id')
+            ->label('Role')
+            ->required()
+            ->options(fn () => self::availableRoles()),
+
+        Forms\Components\Toggle::make('is_active')
+            ->default(true),
+    ]);
     }
 
     /* ---------------------------------------------------
@@ -108,6 +161,7 @@ class UserResource extends Resource
      public static function table(Table $table): Table
     {
         return $table
+            
             ->columns([
                 Tables\Columns\TextColumn::make('name')->searchable(),
                 Tables\Columns\TextColumn::make('email'),
