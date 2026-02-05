@@ -5,12 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-
 use Illuminate\Support\Facades\Storage;
-
+use Illuminate\Support\Facades\Auth;
 
 class Restaurant extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'name',
         'slug',
@@ -20,13 +21,20 @@ class Restaurant extends Model
         'created_by',
     ];
 
-    protected static function booted()
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted(): void
     {
-        static::creating(function ($restaurant) {
-            $restaurant->created_by = auth()->id();
+        // Automatically assign the authenticated user's ID to created_by
+        static::creating(function (Model $restaurant) {
+            if (Auth::check()) {
+                $restaurant->created_by = Auth::id();
+            }
         });
-        
-        static::deleted(function (Restaurant $restaurant) {
+
+        // Cleanup: Delete the restaurant's directory when the record is deleted
+        static::deleted(function (Model $restaurant) {
             if ($restaurant->slug) {
                 Storage::disk('public')->deleteDirectory(
                     'restaurants/' . $restaurant->slug
@@ -34,6 +42,13 @@ class Restaurant extends Model
             }
         });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Relationships
+    |--------------------------------------------------------------------------
+    */
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
@@ -59,4 +74,3 @@ class Restaurant extends Model
         return $this->hasMany(Order::class);
     }
 }
-
