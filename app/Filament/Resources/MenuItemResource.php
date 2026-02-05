@@ -3,96 +3,147 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\MenuItemResource\Pages;
-use App\Filament\Resources\MenuItemResource\RelationManagers;
 use App\Models\MenuItem;
+use App\Models\Category;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Str;
 
 class MenuItemResource extends Resource
 {
     protected static ?string $model = MenuItem::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    
+    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static ?string $navigationLabel = 'Menu Items';
+    protected static ?string $navigationGroup = 'Menu Management';
+    protected static ?int $navigationSort = 2;
 
-    public static function form(Form $form): Form
+    /* -------------------------------------------------
+     | ACCESS CONTROL
+     |--------------------------------------------------*/
+    public static function canAccess(): bool
     {
-        return $form
-            ->schema([
-                Forms\Components\Select::make('restaurant_id')
-                    ->relationship('restaurant', 'name')
-                    ->required(),
-                Forms\Components\Select::make('category_id')
-                    ->relationship('category', 'name')
-                    ->required(),
-                Forms\Components\TextInput::make('name')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\Textarea::make('description')
-                    ->columnSpanFull(),
-                Forms\Components\TextInput::make('price')
-                    ->required()
-                    ->numeric()
-                    ->prefix('$'),
-                Forms\Components\FileUpload::make('image_path')
-                    ->image(),
-                Forms\Components\Toggle::make('is_available')
-                    ->required(),
+        return auth()->check()
+            && auth()->user()->restaurant_id !== null
+            && in_array(auth()->user()->role->name, [
+                'restaurant_admin',
+                'manager',
             ]);
     }
 
+    /* -------------------------------------------------
+     | TENANT ISOLATION
+     |--------------------------------------------------*/
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where('restaurant_id', auth()->user()->restaurant_id);
+    }
+
+    /* -------------------------------------------------
+     | FORM
+     |--------------------------------------------------*/
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            // Forced restaurant
+            Forms\Components\Hidden::make('restaurant_id')
+                ->default(fn () => auth()->user()->restaurant_id)
+                ->required(),
+
+            // Category (scoped)
+            Forms\Components\Select::make('category_id')
+                ->label('Category')
+                ->required()
+                ->options(fn () =>
+                    Category::where('restaurant_id', auth()->user()->restaurant_id)
+                        ->where('is_active', true)
+                        ->pluck('name', 'id')
+                )
+                ->searchable(),
+
+            Forms\Components\TextInput::make('name')
+                ->required()
+                ->maxLength(150),
+
+            Forms\Components\Textarea::make('description')
+                ->maxLength(500)
+                ->columnSpanFull(),
+
+            Forms\Components\TextInput::make('price')
+                ->numeric()
+                ->minValue(0)
+                ->required(),
+
+            Forms\Components\FileUpload::make('image_path')
+                ->label('Item Image')
+                ->image()
+                ->disk('public')
+                ->directory(fn ($get) =>
+                    'restaurants/' .
+                    auth()->user()->restaurant->slug .
+                    '/Categories/' .
+                    Str::slug(
+                        Category::find($get('category_id'))?->name ?? 'uncategorized'
+                    )
+                )
+                ->getUploadedFileNameForStorageUsing(function ($file, $get) {
+                    $itemName = Str::slug($get('name') ?? 'item');
+                    return $itemName . '.' . $file->getClientOriginalExtension();
+                })
+                ->visibility('public')
+                ->imageEditor()
+                ->maxSize(2048),
+
+            Forms\Components\Toggle::make('is_available')
+                ->default(true),
+        ]);
+    }
+
+    /* -------------------------------------------------
+     | TABLE
+     |--------------------------------------------------*/
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('restaurant.name')
-                    ->numeric()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('category.name')
-                    ->numeric()
-                    ->sortable(),
+                Tables\Columns\ImageColumn::make('image_path')
+                    ->label('Image')
+                    ->square(),
+
                 Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('price')
-                    ->money()
+                    ->searchable()
                     ->sortable(),
-                Tables\Columns\ImageColumn::make('image_path'),
+
+                Tables\Columns\TextColumn::make('category.name')
+                    ->label('Category')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('price')
+                    ->money('INR'),
+
                 Tables\Columns\IconColumn::make('is_available')
-                    ->boolean(),
+                    ->boolean()
+                    ->label('Available'),
+
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->filters([
-                //
+                    ->sortable(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->defaultSort('created_at', 'desc');
     }
 
-    public static function getRelations(): array
-    {
-        return [
-            //
-        ];
-    }
-
+    /* -------------------------------------------------
+     | PAGES
+     |--------------------------------------------------*/
     public static function getPages(): array
     {
         return [

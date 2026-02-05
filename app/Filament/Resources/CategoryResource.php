@@ -3,7 +3,6 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\CategoryResource\Pages;
-use App\Filament\Resources\CategoryResource\RelationManagers;
 use App\Models\Category;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -11,7 +10,6 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class CategoryResource extends Resource
 {
@@ -19,68 +17,106 @@ class CategoryResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
-    public static function form(Form $form): Form
+    protected static ?string $navigationLabel = 'Categories';
+
+    protected static ?string $navigationGroup = 'Menu Management';
+
+    protected static ?int $navigationSort = 1;
+
+    /* ---------------------------------------------------------
+     | ACCESS CONTROL
+     |----------------------------------------------------------*/
+    public static function canAccess(): bool
     {
-        return $form
-            ->schema([
-                Forms\Components\Select::make('restaurant_id')
-                    ->relationship('restaurant', 'name')
-                    ->required(),
-                Forms\Components\TextInput::make('name')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('sort_order')
-                    ->required()
-                    ->numeric()
-                    ->default(0),
-                Forms\Components\Toggle::make('is_active')
-                    ->required(),
+        return auth()->check()
+            && auth()->user()->restaurant_id !== null
+            && in_array(auth()->user()->role->name, [
+                'restaurant_admin',
+                'manager',
             ]);
     }
 
+    /* ---------------------------------------------------------
+     | TENANT SCOPING
+     |----------------------------------------------------------*/
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where('restaurant_id', auth()->user()->restaurant_id);
+    }
+
+    /* ---------------------------------------------------------
+     | FORM
+     |----------------------------------------------------------*/
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            // Forced restaurant binding
+            Forms\Components\Hidden::make('restaurant_id')
+                ->default(fn () => auth()->user()->restaurant_id)
+                ->required(),
+
+            Forms\Components\TextInput::make('name')
+                ->required()
+                ->maxLength(100)
+                ->unique(
+                    table: 'categories',
+                    column: 'name',
+                    ignoreRecord: true,
+                    modifyRuleUsing: fn ($rule) =>
+                        $rule->where('restaurant_id', auth()->user()->restaurant_id)
+                ),
+
+            Forms\Components\TextInput::make('sort_order')
+                ->numeric()
+                ->default(0)
+                ->hidden(),
+
+            Forms\Components\Toggle::make('is_active')
+                ->default(true),
+        ]);
+    }
+
+    /* ---------------------------------------------------------
+     | TABLE
+     |----------------------------------------------------------*/
     public static function table(Table $table): Table
     {
         return $table
+            ->reorderable('sort_order')
+            ->defaultSort('sort_order')
             ->columns([
-                Tables\Columns\TextColumn::make('restaurant.name')
-                    ->numeric()
-                    ->sortable(),
                 Tables\Columns\TextColumn::make('name')
+                    ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('sort_order')
-                    ->numeric()
-                    ->sortable(),
+
                 Tables\Columns\IconColumn::make('is_active')
-                    ->boolean(),
+                    ->boolean()
+                    ->label('Active'),
+
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->filters([
-                //
+                    ->sortable(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn () =>
+                        auth()->user()->role->name === 'restaurant_admin'
+                    ),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
+                Tables\Actions\DeleteBulkAction::make()
+                    ->visible(fn () =>
+                        auth()->user()->role->name === 'restaurant_admin'
+                    ),
             ]);
     }
 
-    public static function getRelations(): array
-    {
-        return [
-            //
-        ];
-    }
-
+    /* ---------------------------------------------------------
+     | PAGES
+     |----------------------------------------------------------*/
     public static function getPages(): array
     {
         return [

@@ -5,8 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+use Illuminate\Support\Facades\Storage;
+
 class MenuItem extends Model
 {
+    
     protected $fillable = [
         'restaurant_id',
         'category_id',
@@ -16,7 +19,14 @@ class MenuItem extends Model
         'image_path',
         'is_available',
     ];
-
+     protected static function booted()
+    {
+         static::deleting(function (MenuItem $item) {
+            if ($item->image_path && Storage::disk('public')->exists($item->image_path)) {
+                Storage::disk('public')->delete($item->image_path);
+            }
+        });
+    }
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
