@@ -15,6 +15,7 @@ return new class extends Migration
     $table->bigIncrements('id');
     $table->foreignId('restaurant_id')->constrained()->restrictOnDelete();
     $table->string('table_number');
+    $table->string('qr_path')->nullable()->after('qr_token');
     $table->string('qr_token')->unique();
     $table->unsignedSmallInteger('seating_capacity')->default(1);
     $table->boolean('is_active')->default(true);
