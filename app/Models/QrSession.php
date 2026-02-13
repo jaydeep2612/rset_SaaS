@@ -19,10 +19,14 @@ class QrSession extends Model
     ];
 
     protected $casts = [
+        'is_primary' => 'boolean',
         'expires_at' => 'datetime',
         'is_active' => 'boolean',
     ];
-
+    public function isExpired(): bool
+    {
+        return $this->expires_at->isPast();
+    }
     public function table(): BelongsTo
     {
         return $this->belongsTo(RestaurantTable::class, 'restaurant_table_id');

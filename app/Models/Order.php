@@ -44,4 +44,13 @@ class Order extends Model
     {
         return $this->hasMany(Payment::class);
     }
+     public function kitchenQueue()
+    {
+        return $this->hasOne(KitchenQueue::class);
+    }
+
+    public function statusLogs()
+    {
+        return $this->hasMany(OrderStatusLog::class);
+    }
 }

@@ -17,88 +17,112 @@ class OrderResource extends Resource
 {
     protected static ?string $model = Order::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
+    protected static ?string $navigationLabel = 'Orders';
+    protected static ?string $navigationGroup = 'Operations';
+    protected static ?int $navigationSort = 1;
+
+    /* ---------------- ACCESS ---------------- */
+    public static function canAccess(): bool
+    {
+        return auth()->check()
+            && auth()->user()->restaurant_id
+            && in_array(auth()->user()->role->name, [
+                'restaurant_admin',
+                'manager',
+            ]);
+    }
+
+    /* ---------------- TENANCY ---------------- */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where('restaurant_id', auth()->user()->restaurant_id);
+    }
 
     public static function form(Form $form): Form
     {
-        return $form
-            ->schema([
-                Forms\Components\Select::make('restaurant_id')
-                    ->relationship('restaurant', 'name')
-                    ->required(),
-                Forms\Components\TextInput::make('restaurant_table_id')
-                    ->required()
-                    ->numeric(),
-                Forms\Components\TextInput::make('qr_session_id')
-                    ->required()
-                    ->numeric(),
-                Forms\Components\TextInput::make('status')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('customer_name')
-                    ->maxLength(255)
-                    ->default(null),
-                Forms\Components\Textarea::make('notes')
-                    ->columnSpanFull(),
-                Forms\Components\TextInput::make('subtotal')
-                    ->required()
-                    ->numeric(),
-                Forms\Components\TextInput::make('tax')
-                    ->required()
-                    ->numeric()
-                    ->default(0.00),
-                Forms\Components\TextInput::make('total_amount')
-                    ->required()
-                    ->numeric(),
-            ]);
+        return $form->schema([
+            Forms\Components\TextInput::make('status')->disabled(),
+            Forms\Components\TextInput::make('customer_name')->disabled(),
+            Forms\Components\Textarea::make('notes')->disabled(),
+            Forms\Components\TextInput::make('subtotal')->disabled(),
+            Forms\Components\TextInput::make('tax')->disabled(),
+            Forms\Components\TextInput::make('total_amount')->disabled(),
+        ]);
     }
 
     public static function table(Table $table): Table
     {
-        return $table
+         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('restaurant.name')
-                    ->numeric()
+                Tables\Columns\TextColumn::make('id')
+                    ->label('Order #')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('restaurant_table_id')
-                    ->numeric()
+
+                Tables\Columns\TextColumn::make('table.name')
+                    ->label('Table'),
+
+                Tables\Columns\BadgeColumn::make('status')
+                    ->colors([
+                        'gray' => 'placed',
+                        'warning' => 'preparing',
+                        'info' => 'ready',
+                        'success' => 'served',
+                        'danger' => 'cancelled',
+                    ])
                     ->sortable(),
-                Tables\Columns\TextColumn::make('qr_session_id')
-                    ->numeric()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('status')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('customer_name')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('subtotal')
-                    ->numeric()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('tax')
-                    ->numeric()
-                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('total_amount')
-                    ->numeric()
+                    ->money('INR')
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->filters([
-                //
+                    ->sortable(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\ViewAction::make(),
+
+                Tables\Actions\Action::make('advance_status')
+                    ->label('Advance Status')
+                    ->visible(fn (Order $record) =>
+                        auth()->user()->role->name === 'restaurant_admin'
+                        && $record->status !== 'completed'
+                    )
+                    ->action(function (Order $record) {
+                        $next = match ($record->status) {
+                            'placed' => 'preparing',
+                            'preparing' => 'ready',
+                            'ready' => 'served',
+                            'served' => 'completed',
+                            default => null,
+                        };
+
+                        if ($next) {
+                            OrderStatusService::transition(
+                                $record,
+                                $next,
+                                auth()->user()->email
+                            );
+                        }
+                    }),
+
+                Tables\Actions\Action::make('cancel')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(fn () =>
+                        auth()->user()->role->name === 'restaurant_admin'
+                    )
+                    ->action(fn (Order $record) =>
+                        OrderStatusService::transition(
+                            $record,
+                            'cancelled',
+                            auth()->user()->email
+                        )
+                    ),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->defaultSort('created_at', 'desc');
     }
 
     public static function getRelations(): array
@@ -113,7 +137,7 @@ class OrderResource extends Resource
         return [
             'index' => Pages\ListOrders::route('/'),
             'create' => Pages\CreateOrder::route('/create'),
-            'edit' => Pages\EditOrder::route('/{record}/edit'),
+            //'edit' => Pages\EditOrder::route('/{record}/edit'),
         ];
     }
 }

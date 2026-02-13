@@ -19,6 +19,10 @@ class MenuItem extends Model
         'image_path',
         'is_available',
     ];
+    protected $casts = [
+        'price' => 'decimal:2',
+        'is_available' => 'boolean',
+    ];
      protected static function booted()
     {
          static::deleting(function (MenuItem $item) {

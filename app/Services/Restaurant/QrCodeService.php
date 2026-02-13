@@ -18,11 +18,8 @@ class QrCodeService
 
     Storage::disk('public')->makeDirectory($folder);
 
-    $url = route('menu.view', [
-        'restaurant' => $restaurant->id,
-        'table'      => $table->id,
-        'token'      => $table->qr_token,
-    ]);
+    $url = "http://localhost:8081/menu/{$restaurant->id}/{$table->id}/{$table->qr_token}";
+
 
     /**
      * 1️⃣ Generate QR SVG

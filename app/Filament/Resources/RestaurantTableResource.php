@@ -259,7 +259,7 @@ class RestaurantTableResource extends Resource
         ];
     }
 
-    public static function cancreate(): bool
+    public static function canCreate(): bool
     {
         return false; // Disable manual creation
     }
