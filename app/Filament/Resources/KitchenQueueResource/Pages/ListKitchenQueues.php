@@ -3,17 +3,30 @@
 namespace App\Filament\Resources\KitchenQueueResource\Pages;
 
 use App\Filament\Resources\KitchenQueueResource;
-use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Resources\Components\Tab;
 
 class ListKitchenQueues extends ListRecords
 {
-    protected static string $resource = KitchenQueueResource::class;
+    public static string $resource = KitchenQueueResource::class;
 
-    protected function getHeaderActions(): array
+    public function getTabs(): array
     {
         return [
-            Actions\CreateAction::make(),
+            'placed' => Tab::make()
+                ->modifyQueryUsing(fn ($query) =>
+                    $query->where('current_status', 'placed')
+                ),
+
+            'preparing' => Tab::make()
+                ->modifyQueryUsing(fn ($query) =>
+                    $query->where('current_status', 'preparing')
+                ),
+
+            'ready' => Tab::make()
+                ->modifyQueryUsing(fn ($query) =>
+                    $query->where('current_status', 'ready')
+                ),
         ];
     }
 }

@@ -7,6 +7,8 @@ use App\Models\Restaurant;
 use App\Models\RestaurantTable;
 use App\Services\Restaurant\QrSessionService;
 use Illuminate\Http\Request;
+use App\Models\QrSession;
+use Illuminate\Support\Str;
 
 class QrSessionController extends Controller
 {
@@ -37,29 +39,27 @@ class QrSessionController extends Controller
     /**
      * Start / Resume session
      */
-    public function startSession(
-        Request $request,
-        Restaurant $restaurant,
-        RestaurantTable $table,
-        string $token,
-        QrSessionService $service
-    ) {
-        $request->validate([
-            'customer_name' => ['nullable', 'string', 'max:100'],
-        ]);
+    public function startSession(Restaurant $restaurant, RestaurantTable $table, ?string $customerName)
+{
+    
+    // Check existing active session
+    $existing = QrSession::where('restaurant_table_id', $table->id)
+        ->where('is_active', true)
+        ->where('expires_at', '>', now())
+        ->first();
 
-        abort_unless($table->restaurant_id === $restaurant->id, 404);
-        abort_unless($table->qr_token === $token, 403);
-
-        $session = $service->startSession(
-            $restaurant,
-            $table,
-            $request->customer_name
-        );
-
-        return response()->json([
-            'session_token' => $session->session_token,
-            'expires_at' => $session->expires_at,
-        ]);
+    if ($existing) {
+        return $existing;
     }
+
+    return QrSession::create([
+        'restaurant_id' => $restaurant->id,
+        'restaurant_table_id' => $table->id,
+        'customer_name' => $customerName,
+        'session_token' => \Str::uuid(),
+        'is_active' => true,
+        'expires_at' => now()->addHours(3),
+    ]);
+}
+
 }

@@ -22,7 +22,9 @@ class CreateUser extends CreateRecord
         }
 
         $restaurant = $authUser->restaurant;
-
+        if (! $authUser->isSuperAdmin()) {
+                $data['restaurant_id'] = $authUser->restaurant_id;
+            }
         // 🛑 Limit reached
         if ($restaurant->users()->count() >= $restaurant->user_limits) {
 
