@@ -51,6 +51,13 @@ class PlaceOrderController extends Controller
                 'session_token' => ['Session expired or invalid.']
             ]);
         }
+        // 🔒 Restrict ordering for non-primary users
+        if (!$session->is_primary && $session->join_status !== 'approved') {
+            throw ValidationException::withMessages([
+                'session_token' => ['Waiting for primary approval.']
+            ]);
+        }
+
 
         // Validate and prepare items
         $subtotal = 0;
@@ -108,11 +115,11 @@ class PlaceOrderController extends Controller
                 $order->items()->create($itemData);
             }
 
-            KitchenQueue::create([
-                'order_id' => $order->id,
-                'current_status' => 'placed',
-                'priority' => 0,
-            ]);
+            // KitchenQueue::create([
+            //     'order_id' => $order->id,
+            //     'current_status' => 'placed',
+            //     'priority' => 0,
+            // ]);
 
             OrderStatusLog::create([
                 'order_id' => $order->id,

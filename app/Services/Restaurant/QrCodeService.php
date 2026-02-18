@@ -18,7 +18,7 @@ class QrCodeService
 
     Storage::disk('public')->makeDirectory($folder);
 
-    $url = "http://localhost:8081/menu/{$restaurant->id}/{$table->id}/{$table->qr_token}";
+    $url = "http://192.168.1.7:8081/menu/{$restaurant->id}/{$table->id}/{$table->qr_token}";
 
 
     /**

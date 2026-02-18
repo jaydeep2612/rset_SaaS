@@ -14,6 +14,7 @@ class QrSession extends Model
         'session_token',
         'customer_name',
         'is_primary',
+        'join_status',
         'is_active',
         'expires_at',
     ];

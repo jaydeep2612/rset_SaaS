@@ -19,6 +19,12 @@ return new class extends Migration
     $table->string('customer_name')->nullable();
     $table->boolean('is_primary')->default(false);
     $table->boolean('is_active')->default(true);
+    $table->enum('join_status', [
+        'active',      // Primary active
+        'pending',     // Waiting for approval
+        'approved',    // Approved by primary
+        'rejected'     // Rejected by primary
+    ])->default('active');
     $table->timestamp('expires_at');
     $table->timestamps();
 });

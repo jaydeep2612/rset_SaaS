@@ -8,15 +8,14 @@ use App\Models\Restaurant;
 use App\Models\RestaurantTable;
 use App\Services\Restaurant\MenuSessionValidator;
 
-
 class PublicMenuController extends Controller
 {
     public function show(
-    Restaurant $restaurant,
-    RestaurantTable $table,
-    string $token,
-    Request $request,
-    MenuSessionValidator $validator
+        Restaurant $restaurant,
+        RestaurantTable $table,
+        string $token,
+        Request $request,
+        MenuSessionValidator $validator
     ) {
         // 🔐 QR SECURITY
         abort_unless($table->restaurant_id === $restaurant->id, 404);
@@ -34,10 +33,22 @@ class PublicMenuController extends Controller
             $request->session_token
         );
 
+        // 🔥 CRITICAL FIX: STOP HERE IF NOT APPROVED 🔥
+        // If the session is NOT primary AND status is NOT approved, block access.
+        if (!$session->is_primary && $session->join_status !== 'approved') {
+            return response()->json([
+                'message' => 'You are waiting for approval.',
+                'join_status' => $session->join_status 
+            ], 403); // Return 403 Forbidden
+        }
+
+        // If we get here, the user is allowed to see the menu
         return response()->json([
             'session' => [
                 'token' => $session->session_token,
                 'expires_at' => $session->expires_at,
+                'join_status' => $session->join_status, // Send status back for frontend sync
+                'is_primary' => $session->is_primary,
             ],
 
             'restaurant' => [

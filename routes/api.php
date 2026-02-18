@@ -6,15 +6,24 @@ use App\Http\Controllers\Api\PublicMenuController;
 use App\Http\Controllers\Public\QrSessionController;
 use App\Http\Controllers\Api\PlaceOrderController;
 // routes/api.php
+
 Route::post('/orders', [PlaceOrderController::class, 'store']);
 Route::get('/orders/session/{token}', [PlaceOrderController::class, 'getSessionOrders']);
+Route::get(
+    '/table/{tableId}/pending-requests',
+    [QrSessionController::class, 'getPendingRequests']
+);
+Route::post(
+    '/session/{sessionId}/respond',
+    [QrSessionController::class, 'respondToJoin']
+);
 
 Route::prefix('qr')->group(function () {
     Route::get(
         '/validate/{restaurant}/{table}/{token}',
         [QrSessionController::class, 'validateQr']
     );
-
+    Route::post('/session/leave', [QrSessionController::class, 'leaveSession']);
     Route::post(
         '/session/start/{restaurant}/{table}/{token}',
         [QrSessionController::class, 'startSession']
