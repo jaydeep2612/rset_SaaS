@@ -136,21 +136,29 @@ class PlaceOrderController extends Controller
     }
     
         public function getSessionOrders($token)
-        {
-            $session = QrSession::where('session_token', $token)
-                ->where('is_active', true)
-                ->first();
+    {
+        $session = QrSession::where('session_token', $token)->where('is_active', true)->firstOrFail();
 
-            if (!$session) {
-                return response()->json(['message' => 'Invalid session'], 404);
-            }
-
+        // If I am Primary: Get My Orders OR Orders where I am the Host
+        if ($session->is_primary) {
+            $orders = Order::with('items')
+                ->where(function ($query) use ($session) {
+                    $query->where('qr_session_id', $session->id) // My Orders
+                          ->orWhereHas('session', function($q) use ($session) {
+                              $q->where('host_session_id', $session->id); // My Guests' Orders
+                          });
+                })
+                ->latest()
+                ->get();
+        } else {
+            // If I am Guest: I only see my own orders (or you can hide this if bill is consolidated)
             $orders = Order::with('items')
                 ->where('qr_session_id', $session->id)
                 ->latest()
                 ->get();
-
-            return response()->json($orders);
         }
+
+        return response()->json($orders);
+    }
 
 }

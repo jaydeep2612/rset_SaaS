@@ -19,6 +19,7 @@ return new class extends Migration
     $table->string('customer_name')->nullable();
     $table->boolean('is_primary')->default(false);
     $table->boolean('is_active')->default(true);
+    $table->foreignId('host_session_id')->nullable()->constrained('qr_sessions')->onDelete('cascade');
     $table->enum('join_status', [
         'active',      // Primary active
         'pending',     // Waiting for approval

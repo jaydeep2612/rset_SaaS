@@ -16,6 +16,7 @@ class QrSession extends Model
         'is_primary',
         'join_status',
         'is_active',
+        'host_session_id',
         'expires_at',
     ];
 
@@ -36,5 +37,15 @@ class QrSession extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+    public function guests(): HasMany
+    {
+        return $this->hasMany(QrSession::class, 'host_session_id');
+    }
+
+    // Get the host of this guest
+    public function host(): BelongsTo
+    {
+        return $this->belongsTo(QrSession::class, 'host_session_id');
     }
 }

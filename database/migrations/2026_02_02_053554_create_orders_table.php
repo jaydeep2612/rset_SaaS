@@ -20,7 +20,6 @@ return new class extends Migration
     $table->string('customer_name')->nullable();
     $table->text('notes')->nullable();
     $table->decimal('subtotal', 10, 2);
-    $table->decimal('tax', 10, 2)->default(0);
     $table->decimal('total_amount', 10, 2);
     $table->timestamps();
 

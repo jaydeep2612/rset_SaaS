@@ -177,7 +177,7 @@ class OrderResource extends Resource
         if ($status === 'preparing') {
             KitchenQueue::create([
                 'order_id' => $record->id,
-                'current_status' => 'Placed',
+                'current_status' => 'placed',
                 'priority' => 0,
             ]);
         }

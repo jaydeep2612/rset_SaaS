@@ -12,12 +12,50 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Facades\Auth;
 
 class PaymentResource extends Resource
 {
     protected static ?string $model = Payment::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationGroup = 'Payment Panel';
+    protected static ?int $navigationSort = 1;
+
+    
+    public static function canAccess(): bool
+    {
+        return auth()->check()
+            && auth()->user()->restaurant_id
+            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $user = Auth::user();
+
+        return parent::getEloquentQuery()
+            ->whereHas('order', function ($query) use ($user) {
+                $query->where('restaurant_id', $user->restaurant_id);
+            });
+    }
+
+
+
+    public static function canCreate(): bool
+    {
+        return false; // managers should not manually create payments
+    }
+
+    public static function canEdit($record): bool
+    {
+        return false; // payments should not be editable
+    }
+
+    public static function canDelete($record): bool
+    {
+        return false; // prevent deleting payment records
+    }
 
     public static function form(Form $form): Form
     {
@@ -47,41 +85,62 @@ class PaymentResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('order.id')
-                    ->numeric()
+                    ->label('Order #')
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('order.customer_name')
+                    ->label('Customer')
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('order.table.name')
+                    ->label('Table'),
+
+                Tables\Columns\TextColumn::make('order.total_amount')
+                    ->label('Order Total')
+                    ->money('INR')
+                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('amount')
-                    ->numeric()
+                    ->money('INR')
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('payment_method')
-                    ->searchable(),
+                    ->badge()
+                    ->color(fn ($state) => match ($state) {
+                        'cash' => 'success',
+                        'card' => 'primary',
+                        'upi' => 'warning',
+                        default => 'gray',
+                    }),
+
                 Tables\Columns\TextColumn::make('status')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('transaction_reference')
-                    ->searchable(),
+                    ->badge()
+                    ->color(fn ($state) => match ($state) {
+                        'paid' => 'success',
+                        'pending' => 'warning',
+                        'failed' => 'danger',
+                        default => 'gray',
+                    }),
+
                 Tables\Columns\TextColumn::make('paid_at')
                     ->dateTime()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('status')
+                    ->options([
+                        'paid' => 'Paid',
+                        'pending' => 'Pending',
+                        'failed' => 'Failed',
+                    ]),
             ])
             ->actions([
+                Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
             ]);
     }
+
+
 
     public static function getRelations(): array
     {

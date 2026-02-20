@@ -16,7 +16,7 @@ return new class extends Migration
     $table->foreignId('order_id')->constrained()->restrictOnDelete();
     $table->string('from_status')->nullable();
     $table->string('to_status');
-    $table->string('changed_by')->nullable()->change();
+    $table->string('changed_by')->nullable();
     $table->timestamps();
 });
 

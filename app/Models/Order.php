@@ -16,7 +16,6 @@ class Order extends Model
         'customer_name',
         'notes',
         'subtotal',
-        'tax',
         'total_amount',
     ];
 
