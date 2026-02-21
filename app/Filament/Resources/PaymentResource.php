@@ -25,9 +25,10 @@ class PaymentResource extends Resource
     
     public static function canAccess(): bool
     {
-        return auth()->check()
-            && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
+        // return auth()->check()
+        //     && auth()->user()->restaurant_id
+        //     && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
+        return false ; // Temporarily disable access to payment resource for all users
     }
 
     public static function getEloquentQuery(): Builder
