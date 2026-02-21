@@ -6,7 +6,16 @@ use App\Http\Controllers\Api\PublicMenuController;
 use App\Http\Controllers\Public\QrSessionController;
 use App\Http\Controllers\Api\PlaceOrderController;
 // routes/api.php
+use App\Http\Controllers\Api\WaiterAppController;
 
+// Waiter App Auth
+Route::post('/waiter/login', [WaiterAppController::class, 'login']);
+
+// Protected Waiter Routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/waiter/orders/ready', [WaiterAppController::class, 'getReadyOrders']);
+    Route::post('/waiter/orders/{id}/serve', [WaiterAppController::class, 'markAsServed']);
+});
 Route::post('/orders', [PlaceOrderController::class, 'store']);
 Route::get('/orders/session/{token}', [PlaceOrderController::class, 'getSessionOrders']);
 Route::get(

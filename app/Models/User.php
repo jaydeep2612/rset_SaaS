@@ -9,12 +9,12 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Scopes\RestaurantScope;
-
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasApiTokens;
     protected $fillable = [
         'restaurant_id',
         'role_id',

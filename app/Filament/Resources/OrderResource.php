@@ -11,7 +11,12 @@ use Filament\Resources\Resource;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Tables\Columns\Layout\Stack;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Panel;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Blade;
+use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\HtmlString;
 
 class OrderResource extends Resource
@@ -20,6 +25,42 @@ class OrderResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-inbox-arrow-down';
     protected static ?string $navigationLabel = 'Incoming Orders';
     protected static ?string $navigationGroup = 'Operations';
+
+    /* ---------------- FIXED STATUS HEADER (DISPLAY ONLY) ---------------- */
+    public static function init(): void
+    {
+        FilamentView::registerRenderHook(
+            'panels::resource.pages.list-records.table.before',
+            fn(): string => Blade::render('
+            @php
+                $resId = auth()->user()->restaurant_id;
+                $counts = \App\Models\Order::where("restaurant_id", $resId)
+                    ->selectRaw("status, count(*) as total")
+                    ->groupBy("status")
+                    ->pluck("total", "status");
+                
+                // HIGHER CONTRAST COLOR COMBINATIONS
+                $statuses = [
+                    "placed"    => ["label" => "Placed",    "border" => "#ef4444", "text" => "#b91c1c", "bg" => "#fef2f2"], 
+                    "preparing" => ["label" => "Preparing", "border" => "#f97316", "text" => "#c2410c", "bg" => "#fff7ed"], 
+                    "ready"     => ["label" => "Ready",     "border" => "#10b981", "text" => "#047857", "bg" => "#ecfdf5"], 
+                    "served"    => ["label" => "Served",    "border" => "#3b82f6", "text" => "#1d4ed8", "bg" => "#eff6ff"], 
+                    "cancelled" => ["label" => "Cancelled", "border" => "#9ca3af", "text" => "#4b5563", "bg" => "#f3f4f6"], 
+                ];
+            @endphp
+            <div style="position: sticky; top: 0; z-index: 50; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 1.25rem 0; margin-top: -1rem; margin-bottom: 1.5rem; border-bottom: 1px solid #e5e7eb; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                <div style="display: flex; flex-wrap: wrap; gap: 1rem; padding: 0 1rem; justify-content: center;">
+                    @foreach($statuses as $key => $data)
+                        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1.25rem; background: {{ $data[\'bg\'] }}; border-radius: 0.75rem; border: 1.5px solid {{ $data[\'border\'] }}; min-width: 140px; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                            <span style="font-size: 0.75rem; font-weight: 800; color: {{ $data[\'text\'] }}; text-transform: uppercase; letter-spacing: 0.05em;">{{ $data[\'label\'] }}</span>
+                            <span style="font-size: 1.5rem; font-weight: 900; color: {{ $data[\'text\'] }}; line-height: 1;">{{ $counts[$key] ?? 0 }}</span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        '),
+        );
+    }
 
     public static function canAccess(): bool
     {
@@ -30,146 +71,165 @@ class OrderResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
+        static::init();
+
         return parent::getEloquentQuery()
             ->where('restaurant_id', auth()->user()->restaurant_id)
             ->with(['items.menuItem', 'table'])
-            // Custom ordering to keep 'placed' orders (Pending) at the top
+            // Keeps placed orders at the top, then preparing, etc.
             ->orderByRaw("FIELD(status, 'placed', 'preparing', 'ready', 'served', 'cancelled')")
-            ->orderBy('created_at', 'desc');
+            ->orderBy('created_at', 'asc');
     }
 
-   public static function table(Table $table): Table
-{
-    return $table
-        ->poll('10s')
-        ->contentGrid([
-            'default' => 1,
-            'md' => 2,
-            'xl' => 3,
-            '2xl' => 4,
-        ])
-        ->recordClasses(fn (Order $record) => match ($record->status) {
-            'placed' => 'bg-white dark:bg-gray-800 border-l-4 border-danger-500 shadow-md rounded-xl p-4 h-full flex flex-col justify-between',
-            default => 'bg-white dark:bg-gray-800 border-l-4 border-gray-200 dark:border-gray-700 shadow rounded-xl p-4 h-full flex flex-col justify-between opacity-75',
-        })
-        ->columns([
-            Tables\Columns\Layout\Stack::make([
-                
-                // --- 1. HEADER: Table Number & Time (Fixed Visibility) ---
-                Tables\Columns\Layout\Split::make([
-                    // Table Number (with fallback if null)
-                    Tables\Columns\TextColumn::make('restaurantTable.table_number')
-                        ->formatStateUsing(fn ($state) => $state ? "Table {$state}" : "Takeaway") 
-                        ->weight(FontWeight::Black)
-                        ->color('gray')
-                        ->size(Tables\Columns\TextColumn\TextColumnSize::Large)
-                        ->extraAttributes(['class' => 'text-xl font-black uppercase tracking-tight text-gray-900 dark:text-white']), // Forced styling
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->poll('5s')
+            ->contentGrid([
+                'default' => 1,
+                'md' => 2,
+                'xl' => 3,
+                '2xl' => 4,
+            ])
+            ->columns([
+                Panel::make([
+                    Stack::make([
+                        Split::make([
+                            Stack::make([
+                                Tables\Columns\TextColumn::make('id')
+                                    ->formatStateUsing(fn($state) => "#{$state}")
+                                    ->weight(FontWeight::Black)
+                                    ->color('gray')
+                                    ->size('lg'),
 
-                    // Time Ago
-                    Tables\Columns\TextColumn::make('created_at')
-                        ->since()
-                        ->badge()
-                        ->color('gray')
-                        ->alignEnd(),
-                ])->extraAttributes(['class' => 'items-center mb-2']),
+                                Tables\Columns\TextColumn::make('created_at')
+                                    ->since()
+                                    ->color(fn(Order $record) => $record->created_at->diffInSeconds(now()) >= 30 && $record->status === 'placed' ? 'danger' : 'gray')
+                                    ->weight(fn(Order $record) => $record->created_at->diffInSeconds(now()) >= 30 && $record->status === 'placed' ? FontWeight::Bold : FontWeight::Medium)
+                                    ->size('xs')
+                                    ->icon('heroicon-m-clock'),
+                            ]),
 
-                // --- 2. SUB-INFO: Customer & Priority ---
-                Tables\Columns\Layout\Split::make([
-                    Tables\Columns\TextColumn::make('priority_label')
-                        ->default('HIGH PRIORITY')
-                        ->weight(FontWeight::Bold)
-                        ->color('danger')
-                        ->size(Tables\Columns\TextColumn\TextColumnSize::ExtraSmall),
+                            Stack::make([
+                                Tables\Columns\TextColumn::make('status')
+                                    ->badge()
+                                    ->color(fn(string $state): string => match ($state) {
+                                        'placed' => 'danger',
+                                        'preparing' => 'warning',
+                                        'ready' => 'success',
+                                        'served' => 'info',
+                                        'cancelled' => 'gray',
+                                        default => 'info',
+                                    })
+                                    ->formatStateUsing(fn($state) => strtoupper($state))
+                                    ->alignEnd(),
 
-                    Tables\Columns\TextColumn::make('customer_name')
-                        ->icon('heroicon-m-user')
-                        ->limit(12) // Shorten the hash/name
-                        ->color('gray')
-                        ->alignEnd(),
-                ])->extraAttributes(['class' => 'mb-4 border-b border-gray-100 dark:border-gray-700 pb-2']),
+                                Tables\Columns\TextColumn::make('customer_name')
+                                    ->label('Customer')
+                                    ->size('sm')
+                                    ->weight(FontWeight::Bold)
+                                    ->color('gray')
+                                    ->alignEnd()
+                                    ->limit(15),
+                            ])->alignment('end'),
+                        ]),
 
-                // --- 3. ITEMS LIST (Fixed Spacing) ---
-                Tables\Columns\TextColumn::make('order_items')
-                    ->state(fn (Order $record) => $record->items)
-                    ->formatStateUsing(function ($state, Order $record) {
-                        $html = '<div class="w-full space-y-3 mb-4">'; // Increased spacing between rows
-                        
-                        foreach ($record->items as $item) {
-                            $totalItemPrice = (float)$item->unit_price * $item->quantity;
-                            $priceFormatted = '₹' . number_format($totalItemPrice, 2);
-                            $itemName = $item->menuItem ? $item->menuItem->name : $item->item_name;
-                            
-                            $html .= "
-                                <div class='flex justify-between items-start text-sm w-full'>
-                                    <div class='flex items-start gap-2 pr-4'> 
-                                        <span class='font-bold text-gray-900 dark:text-white whitespace-nowrap'>{$item->quantity}x</span>
-                                        <span class='text-gray-700 dark:text-gray-300 leading-tight'>{$itemName}</span>
-                                    </div>
+                        /* --- TABLE NO. --- */
+                        Tables\Columns\TextColumn::make('table.table_number')
+                            ->formatStateUsing(fn($state) => $state ? "TABLE: {$state}" : "TAKEAWAY")
+                            ->weight(FontWeight::ExtraBold)
+                            ->size('xl')
+                            ->icon('heroicon-m-map-pin')
+                            ->color('primary')
+                            ->extraAttributes(['class' => 'mt-1']),
 
-                                    <span class='font-bold text-gray-900 dark:text-white whitespace-nowrap pl-2'>
-                                        {$priceFormatted}
-                                    </span>
-                                </div>
-                            ";
-                            
-                            if ($item->notes) {
-                                $html .= "<div class='text-xs text-red-500 ml-6 italic mt-1'>📝 {$item->notes}</div>";
-                            }
-                        }
-                        $html .= '</div>';
-                        return new HtmlString($html);
-                    })
-                    ->html(),
+                        /* --- ITEMS LIST HTML --- */
+                        Tables\Columns\TextColumn::make('items_list')
+                            ->label('Items')
+                            ->html()
+                            ->getStateUsing(function (Order $record) {
+                                return $record->items->map(function ($item) {
+                                    $category = strtoupper($item->menuItem?->category?->name ?? 'GENERAL');
+                                    $name = $item->menuItem ? $item->menuItem->name : $item->item_name;
+                                    $qty = $item->quantity;
+                                    $price = number_format($item->unit_price * $qty, 2);
 
-                // --- 4. TOTAL ---
-                Tables\Columns\Layout\Split::make([
-                    Tables\Columns\TextColumn::make('total_label')
-                        ->default('Total')
-                        ->weight(FontWeight::Bold)
-                        ->color('gray'),
+                                    $html = "
+                                        <div style='margin-bottom: 8px; border-bottom: 1px dashed #e5e7eb; padding-bottom: 6px;'>
+                                            <div style='font-weight: 800; font-size: 0.65rem; color: #9ca3af; letter-spacing: 0.05em;'>{$category}</div>
+                                            <div style='display: flex; justify-content: space-between; align-items: baseline; width: 100%;'>
+                                                <span style='flex-grow: 1; font-size: 0.9rem; font-weight: 600; color: #374151;'><span style='color: #111827;'>{$qty}x</span> {$name}</span>
+                                                <span style='font-weight: 700; font-size: 0.85rem; margin-left: 10px; text-align: right; color: #4b5563;'>₹{$price}</span>
+                                            </div>";
+                                    
+                                    if ($item->notes) {
+                                        $html .= "<div style='font-size: 0.75rem; color: #ef4444; margin-top: 4px; font-style: italic;'>📝 {$item->notes}</div>";
+                                    }
 
-                    Tables\Columns\TextColumn::make('total_amount')
-                        ->prefix('₹') 
-                        ->numeric(decimalPlaces: 2)
-                        ->weight(FontWeight::Black)
-                        ->size(Tables\Columns\TextColumn\TextColumnSize::Large)
-                        ->alignEnd(),
-                ])->extraAttributes(['class' => 'mt-auto pt-3 border-t border-dashed border-gray-300 dark:border-gray-600']),
-            ])->space(2),
-        ])
-        ->actions([
-            Tables\Actions\ActionGroup::make([
+                                    $html .= "</div>";
+
+                                    return $html;
+                                })->implode('');
+                            })
+                            ->extraAttributes(['class' => 'mt-3 pt-2 border-t border-gray-200']),
+
+                        /* --- TOTAL --- */
+                        Split::make([
+                            Tables\Columns\TextColumn::make('total_label')
+                                ->default('ORDER TOTAL')
+                                ->size('sm')
+                                ->weight(FontWeight::ExtraBold)
+                                ->color('gray'),
+                            Tables\Columns\TextColumn::make('total_amount')
+                                ->money('INR')
+                                ->weight(FontWeight::Black)
+                                ->size('lg')
+                                ->color('primary')
+                                ->alignEnd(),
+                        ])->extraAttributes(['class' => 'pt-3 mt-1']),
+
+                    ])->space(3),
+                ])
+                    ->extraAttributes(fn(Order $record): array => [
+                        'style' => match ($record->status) {
+                            'placed'    => 'border: 2px solid #ef4444 !important; border-radius: 1rem; background-color: #fef2f2;',
+                            'preparing' => 'border: 2px solid #f97316 !important; border-radius: 1rem; background-color: #fff7ed;',
+                            'ready'     => 'border: 2px solid #10b981 !important; border-radius: 1rem; background-color: #ecfdf5;',
+                            'served'    => 'border: 2px solid #3b82f6 !important; border-radius: 1rem; background-color: #eff6ff;',
+                            'cancelled' => 'border: 2px solid #9ca3af !important; background-color: #f3f4f6 !important; border-radius: 1rem; opacity: 0.8;',
+                            default     => 'border: 2px solid #9ca3af !important; border-radius: 1rem;',
+                        },
+                        'class' => 'shadow-md hover:shadow-lg transition-all duration-300',
+                    ]),
+            ])
+            ->actions([
                 Tables\Actions\Action::make('cancel')
                     ->label('Reject')
                     ->button()
                     ->color('danger')
-                    ->icon('heroicon-m-x-mark')
+                    ->icon('heroicon-m-x-circle')
                     ->requiresConfirmation()
                     ->visible(fn (Order $record) => $record->status === 'placed')
-                    ->action(fn (Order $record) => static::processOrder($record, 'cancelled'))
-                    ->extraAttributes(['class' => 'w-full flex-1']),
+                    ->action(fn (Order $record) => static::processOrder($record, 'cancelled')),
 
                 Tables\Actions\Action::make('confirm')
                     ->label('Accept')
                     ->button()
-                    ->color('success')
-                    ->icon('heroicon-m-check')
+                    ->color('warning')
+                    ->icon('heroicon-o-fire')
                     ->visible(fn (Order $record) => $record->status === 'placed')
-                    ->action(fn (Order $record) => static::processOrder($record, 'preparing'))
-                    ->extraAttributes(['class' => 'w-full flex-1']),
+                    ->action(fn (Order $record) => static::processOrder($record, 'preparing')),
                     
                  Tables\Actions\Action::make('served')
                     ->label('Mark Served')
                     ->button()
                     ->color('success')
-                    ->visible(fn (Order $record) => $record->status === 'ready')
-                    ->action(fn (Order $record) => static::processOrder($record, 'served'))
-                    ->extraAttributes(['class' => 'w-full']),
-            ])
-            ->dropdown(false)
-            ->extraAttributes(['class' => 'flex gap-3 w-full mt-2'])
-        ]);
-}
+                    ->icon('heroicon-m-check-circle')
+                    ->visible(fn (Order $record) => in_array($record->status, ['preparing', 'ready']))
+                    ->action(fn (Order $record) => static::processOrder($record, 'served')),
+            ]);
+    }
+
     public static function processOrder(Order $record, $status)
     {
         $record->update(['status' => $status]);
