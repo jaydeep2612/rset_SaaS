@@ -42,4 +42,12 @@ class RestaurantTable extends Model
     {
         return $this->hasMany(QrSession::class);
     }
+    public function qrSessions()
+    {
+        return $this->hasMany(QrSession::class, 'restaurant_table_id');
+    }
+    public function orders()
+    {
+        return $this->hasMany(\App\Models\Order::class, 'restaurant_table_id');
+    }
 }

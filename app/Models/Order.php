@@ -52,4 +52,10 @@ class Order extends Model
     {
         return $this->hasMany(OrderStatusLog::class);
     }
+    public function restaurantTable()
+    {
+        // Make sure the foreign key ('restaurant_table_id') matches your database column. 
+        // If your column is named just 'table_id', change it below.
+        return $this->belongsTo(RestaurantTable::class, 'restaurant_table_id');
+    }
 }

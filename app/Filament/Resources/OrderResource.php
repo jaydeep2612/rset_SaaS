@@ -45,6 +45,7 @@ class OrderResource extends Resource
                     "preparing" => ["label" => "Preparing", "border" => "#f97316", "text" => "#c2410c", "bg" => "#fff7ed"], 
                     "ready"     => ["label" => "Ready",     "border" => "#10b981", "text" => "#047857", "bg" => "#ecfdf5"], 
                     "served"    => ["label" => "Served",    "border" => "#3b82f6", "text" => "#1d4ed8", "bg" => "#eff6ff"], 
+                    "completed" => ["label" => "Completed", "border" => "#8b5cf6", "text" => "#7c3aed", "bg" => "#f5f3ff"], 
                     "cancelled" => ["label" => "Cancelled", "border" => "#9ca3af", "text" => "#4b5563", "bg" => "#f3f4f6"], 
                 ];
             @endphp
@@ -77,7 +78,7 @@ class OrderResource extends Resource
             ->where('restaurant_id', auth()->user()->restaurant_id)
             ->with(['items.menuItem', 'table'])
             // Keeps placed orders at the top, then preparing, etc.
-            ->orderByRaw("FIELD(status, 'placed', 'preparing', 'ready', 'served', 'cancelled')")
+            ->orderByRaw("FIELD(status, 'placed', 'preparing', 'ready', 'served','completed', 'cancelled')")
             ->orderBy('created_at', 'asc');
     }
 

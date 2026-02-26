@@ -19,7 +19,7 @@ return new class extends Migration
     $table->string('status');
     $table->string('customer_name')->nullable();
     $table->text('notes')->nullable();
-    $table->decimal('subtotal', 10, 2);
+    //$table->decimal('subtotal', 10, 2);
     $table->decimal('total_amount', 10, 2);
     $table->timestamps();
 
