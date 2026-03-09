@@ -17,15 +17,18 @@ class QrSessionController extends Controller
         abort_unless($table->qr_token === $token, 403);
         abort_unless($table->is_active, 403);
 
-        // 1. Find the primary host
-        $host = \App\Models\QrSession::where('restaurant_table_id', $table->id)
+        // 1. Find the primary host (Only check currently active ones)
+        $host = QrSession::where('restaurant_table_id', $table->id)
             ->where('is_primary', true)
             ->where('is_active', true)
+            ->where('expires_at', '>', now()) // 🔥 Ghost-proof filter
             ->first();
 
         // 2. Count how many people are currently approved/active at this table
-        $currentOccupancy = \App\Models\QrSession::where('restaurant_table_id', $table->id)
+        $currentOccupancy = QrSession::where('restaurant_table_id', $table->id)
             ->whereIn('join_status', ['active', 'approved'])
+            ->where('is_active', true)           // 🔥 Ghost-proof filter
+            ->where('expires_at', '>', now())    // 🔥 Ghost-proof filter
             ->count();
 
         // 3. Check if capacity is reached
@@ -34,13 +37,14 @@ class QrSessionController extends Controller
         return response()->json([
             'has_active_host' => (bool) $host,
             'host_name'       => $host ? $host->customer_name : null,
-            'is_full'         => $isFull, // 🔥 Tell the app if the table is full
+            'is_full'         => $isFull, // Tell the app if the table is full
             'capacity'        => $table->seating_capacity,
             'occupancy'       => $currentOccupancy
         ]);
     }
 
-    public function startSession(Request $request, Restaurant $restaurant, RestaurantTable $table, string $token) {
+    public function startSession(Request $request, Restaurant $restaurant, RestaurantTable $table, string $token) 
+    {
         abort_unless($table->restaurant_id === $restaurant->id, 404);
         abort_unless($table->qr_token === $token, 403);
 
@@ -50,7 +54,7 @@ class QrSessionController extends Controller
         $existingHost = QrSession::where('restaurant_table_id', $table->id)
             ->where('is_primary', true)
             ->where('is_active', true)
-            ->where('expires_at', '>', now())
+            ->where('expires_at', '>', now()) // 🔥 Ghost-proof filter
             ->latest()
             ->first();
 
@@ -83,17 +87,19 @@ class QrSessionController extends Controller
         ]);
     }
 
-    // 🔥 FIX: Now returns both Pending Requests AND Approved Guests
     public function getPendingRequests($tableId)
     {
+        // 🔥 Also added ghost-proof filters here so old requests don't show up!
         $pending = QrSession::where('restaurant_table_id', $tableId)
             ->where('join_status', 'pending')
             ->where('is_active', true)
+            ->where('expires_at', '>', now()) 
             ->get();
 
         $guests = QrSession::where('restaurant_table_id', $tableId)
             ->where('join_status', 'approved')
             ->where('is_active', true)
+            ->where('expires_at', '>', now()) 
             ->whereNotNull('host_session_id')
             ->get();
 

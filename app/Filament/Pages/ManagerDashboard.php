@@ -20,11 +20,15 @@ class ManagerDashboard extends Page
     protected static ?int $navigationSort = 1;
 
     public $selectedTableId = null;
-    public function getListeners()
+    // 🔥 Listen to Pusher and instantly refresh the page when an order drops!
+    public function getListeners(): array
     {
+        $restaurantId = auth()->user()->restaurant_id;
+
         return [
-            // Listen to the public restaurant channel for new orders
-            "echo-private:restaurant.{$this->getRestaurantId()},OrderStatusUpdated" => '$refresh',
+            // Notice the leading dot (.) before OrderStatusUpdated! 
+            // It tells Livewire this is a custom broadcast name, not a namespace.
+            "echo-private:restaurant.{$restaurantId},.OrderStatusUpdated" => '$refresh',
         ];
     }
     

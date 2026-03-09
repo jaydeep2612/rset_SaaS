@@ -82,7 +82,7 @@ class KitchenQueueResource extends Resource
    public static function table(Table $table): Table
     {
     return $table
-        ->poll('5s')
+        // ->poll('5s')
         ->contentGrid([
             'md' => 2,
             'xl' => 3,

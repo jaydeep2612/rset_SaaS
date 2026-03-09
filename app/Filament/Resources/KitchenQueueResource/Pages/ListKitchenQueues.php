@@ -9,7 +9,14 @@ use Filament\Resources\Components\Tab;
 class ListKitchenQueues extends ListRecords
 {
     public static string $resource = KitchenQueueResource::class;
+    public function getListeners(): array
+    {
+        $restaurantId = auth()->user()->restaurant_id;
 
+        return [
+            "echo-private:restaurant.{$restaurantId},.OrderStatusUpdated" => '$refresh',
+        ];
+    }
     public function getTabs(): array
     {
         return [
