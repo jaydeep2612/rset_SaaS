@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Scopes\RestaurantScope;
 use Laravel\Sanctum\HasApiTokens;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     
     use HasFactory, Notifiable, HasApiTokens;
@@ -30,6 +32,13 @@ class User extends Authenticatable
         'is_active' => 'boolean',
     ];
     protected $hidden = ['password'];
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->is_super_admin
+            || $this->role?->name === 'restaurant_admin'
+            || $this->role?->name === 'manager';
+    }
 
     public function restaurant(): BelongsTo
     {
