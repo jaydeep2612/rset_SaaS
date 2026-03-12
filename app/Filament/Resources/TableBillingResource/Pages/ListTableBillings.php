@@ -12,8 +12,20 @@ class ListTableBillings extends ListRecords
 
     protected function getHeaderActions(): array
     {
+        return [];
+    }
+
+    // 🔥 Listen to the Restaurant's Private Channel for Order Updates
+    public function getListeners(): array
+    {
+        $restaurantId = auth()->user()->restaurant_id;
+
         return [
-            //Actions\CreateAction::make(),
+            // Re-render the billing grid when an order is updated anywhere in the restaurant
+            "echo-private:restaurant.{$restaurantId},.OrderStatusUpdated" => '$refresh',
+            
+            // Optional: Also refresh if a guest joins or leaves!
+            // "echo-private:restaurant.{$restaurantId},.GuestJoinRequested" => '$refresh',
         ];
     }
 }

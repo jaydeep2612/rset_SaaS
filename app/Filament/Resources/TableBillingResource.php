@@ -46,14 +46,13 @@ class TableBillingResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->poll('5s')
+            // 🔥 REMOVED ->poll('5s') to save server load!
             ->contentGrid([
                 'default' => 1,
                 'md' => 2,
                 'xl' => 3,
                 '2xl' => 4,
             ])
-            // Uses Tailwind to nicely support both light and dark mode for the cards
             ->recordClasses(fn (RestaurantTable $record) => 'bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl flex flex-col')
             ->columns([
                 Tables\Columns\Layout\Stack::make([
@@ -138,7 +137,6 @@ class TableBillingResource extends Resource
                                         ->hiddenLabel()
                                         ->content(function (RestaurantTable $record) {
                                             
-                                            // 🔥 FIX: Added explicit `color: #000000;` and `color: #1f2937;` to override Dark Mode defaults
                                             $html = '<div style="max-height: 500px; overflow-y: auto; padding: 20px; background-color: #ffffff; color: #000000; border: 1px solid #e5e7eb; border-radius: 8px; font-family: monospace;">';
                                             $html .= '<h2 style="text-align: center; font-size: 20px; font-weight: 900; margin-bottom: 5px; color: #000000;">TABLE ' . $record->table_number . '</h2>';
                                             $html .= '<div style="text-align: center; font-size: 12px; color: #4b5563; border-bottom: 2px dashed #000000; padding-bottom: 15px; margin-bottom: 15px;">FINAL BILLING SUMMARY</div>';
@@ -245,7 +243,6 @@ class TableBillingResource extends Resource
                                         ->numeric()
                                         ->prefix('₹')
                                         ->readOnly()
-                                        // 🔥 FIX: Removed forced background colors so it adapts naturally to Filament's Dark Mode input fields
                                         ->extraInputAttributes(['style' => 'font-weight: bold; font-size: 1.2rem;']),
 
                                     Forms\Components\TextInput::make('tip')
@@ -259,7 +256,6 @@ class TableBillingResource extends Resource
                                         ->label('Total to Collect')
                                         ->content(function (Forms\Get $get) {
                                             $total = (float) $get('subtotal') + (float) $get('tip');
-                                            // Keeping explicit dark green text and light green background because they look great on both themes
                                             return new HtmlString("
                                                 <div style='font-size: 32px; font-weight: 900; color: #047857; background-color: #ecfdf5; padding: 15px; border-radius: 8px; border: 2px solid #10b981; text-align: center;'>
                                                     ₹" . number_format($total, 2) . "
@@ -337,16 +333,19 @@ class TableBillingResource extends Resource
                         if (!empty($sessionIds)) {
                             QrSession::whereIn('id', $sessionIds)->update([
                                 'is_active' => false,
-                                //'join_status' => 'completed' 
                             ]);
                         }
                     }),
             ])
-            //->actionsAlignment(Tables\Enums\ActionsAlignment::Center)
             ->recordAction(null) 
             ->recordUrl(null);
     }
 
     public static function form(Form $form): Form { return $form->schema([]); }
-    public static function getPages(): array { return ['index' => Pages\ListTableBillings::route('/')]; }
+    
+    public static function getPages(): array { 
+        return [
+            'index' => Pages\ListTableBillings::route('/')
+        ]; 
+    }
 }

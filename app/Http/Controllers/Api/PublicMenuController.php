@@ -14,8 +14,8 @@ class PublicMenuController extends Controller
         Restaurant $restaurant,
         RestaurantTable $table,
         string $token,
-        Request $request,
-        MenuSessionValidator $validator
+        Request $request
+        // Removed the MenuSessionValidator injection here
     ) {
         // 🔐 QR SECURITY
         abort_unless($table->restaurant_id === $restaurant->id, 404);
@@ -23,28 +23,28 @@ class PublicMenuController extends Controller
         abort_unless($table->is_active, 403);
         abort_unless($restaurant->is_active ?? true, 403);
 
-        // 🔐 SESSION SECURITY
-        $request->validate([
-            'session_token' => ['required', 'string'],
-        ]);
+        $request->validate(['session_token' => ['required', 'string']]);
 
-        $session = $validator->validate(
-            $table,
-            $request->session_token
-        );
+        // 🔥 FIX: Explicitly find the session instead of using the old validator
+        $session = \App\Models\QrSession::where('session_token', $request->session_token)
+            ->where('restaurant_table_id', $table->id)
+            ->first();
 
-        // 🔥 CRITICAL FIX: STOP HERE IF NOT APPROVED 🔥
+        // Check if session actually exists and is active
+        if (!$session || !$session->is_active || $session->expires_at < now()) {
+            return response()->json(['message' => 'Session expired'], 403);
+        }
+
+        // CRITICAL FIX: STOP HERE IF NOT APPROVED
         if (!$session->is_primary && $session->join_status !== 'approved') {
             return response()->json([
                 'message' => 'You are waiting for approval.',
                 'join_status' => $session->join_status,
-                // MUST return the session ID even on 403 so the guest can connect to WebSockets!
-                'session' => [
-                    'id' => $session->id 
-                ]
+                'session' => [ 'id' => $session->id ]
             ], 403); 
         }
 
+        // ... (Keep the rest of your existing code below this line to fetch the menu)
         // 🔥 GET HOST SESSION FOR DYNAMIC UI
         $hostSession = \App\Models\QrSession::where('restaurant_table_id', $table->id)
             ->where('is_primary', true)
