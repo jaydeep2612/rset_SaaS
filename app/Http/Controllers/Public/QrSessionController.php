@@ -49,7 +49,7 @@ class QrSessionController extends Controller
         abort_unless($table->qr_token === $token, 403);
 
         $customerName = $request->input('customer_name');
-        $mode = $request->input('mode'); // 'new' (Split) or 'join' (Guest)
+        $mode = $request->input('mode'); 
 
         $existingHost = QrSession::where('restaurant_table_id', $table->id)
             ->where('is_primary', true)
@@ -60,12 +60,20 @@ class QrSessionController extends Controller
 
         // 1. Split Table OR No Host exists -> Create NEW Primary
         if (!$existingHost || $mode === 'new') {
-            // No event needed for hosts
+            
+            // 🔥 NEW: Auto-mark table as occupied when the first person joins
+            if ($table->status === 'available' || $table->status === 'cleaning') {
+                $table->update(['status' => 'occupied']);
+                
+                // Broadcast instantly to all Waiter tablets!
+                event(new \App\Events\TableStatusUpdated($table->id, 'occupied', $table->restaurant_id));
+            }
+
             return QrSession::create([
                 'restaurant_id' => $restaurant->id,
                 'restaurant_table_id' => $table->id,
                 'customer_name' => $customerName,
-                'session_token' => Str::uuid(),
+                'session_token' => \Illuminate\Support\Str::uuid(),
                 'is_primary' => true, 
                 'join_status' => 'active',
                 'is_active' => true,
@@ -79,7 +87,7 @@ class QrSessionController extends Controller
             'restaurant_id' => $restaurant->id,
             'restaurant_table_id' => $table->id,
             'customer_name' => $customerName,
-            'session_token' => Str::uuid(),
+            'session_token' => \Illuminate\Support\Str::uuid(),
             'is_primary' => false,
             'join_status' => 'pending', 
             'is_active' => true,
@@ -87,7 +95,6 @@ class QrSessionController extends Controller
             'expires_at' => now()->addHours(3),
         ]);
 
-        // 🔥 FIX: Fire the event for the GUEST, and do it BEFORE returning!
         \App\Events\GuestJoinRequested::dispatch($guestSession);
 
         return response()->json($guestSession, 201);
@@ -113,6 +120,29 @@ class QrSessionController extends Controller
             'pending' => $pending,
             'guests' => $guests
         ]);
+    }
+    public function callWaiter(Request $request)
+    {
+        $token = $request->bearerToken();
+        $session = \App\Models\QrSession::where('session_token', $token)->first();
+
+        if (!$session) {
+            return response()->json(['message' => 'Invalid session'], 404);
+        }
+
+        // 🔥 Safely fetch the table directly to guarantee we get the correct table number
+        $table = \App\Models\RestaurantTable::find($session->restaurant_table_id);
+        $tableNumber = $table ? ($table->number ?? $table->table_number) : '?';
+
+        // Dispatch the event, now including the customer's name!
+        event(new \App\Events\WaiterCalled(
+            $session->restaurant_id, 
+            $session->restaurant_table_id, // 🔥 Fixed DB column reference
+            $tableNumber,
+            $session->customer_name // 🔥 Sent to Waiter App
+        ));
+
+        return response()->json(['message' => 'Waiter has been notified']);
     }
 
    public function respondToJoin(Request $request, $sessionId)

@@ -18,6 +18,7 @@ return new class extends Migration
     $table->string('qr_path')->nullable();
     $table->string('qr_token')->unique();
     $table->unsignedSmallInteger('seating_capacity')->default(1);
+    $table->string('status')->default('available');
     $table->boolean('is_active')->default(true);
     $table->timestamps();
 

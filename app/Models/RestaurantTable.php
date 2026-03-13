@@ -17,6 +17,7 @@ class RestaurantTable extends Model
         'qr_path',
         'seating_capacity',
         'is_active',
+        'status',
     ];
 
     protected static function booted()

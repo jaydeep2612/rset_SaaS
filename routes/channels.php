@@ -14,3 +14,6 @@ Broadcast::channel('session.{sessionId}', function ($user, $sessionId) {
     // Standard logged-in users generally shouldn't be listening to guest sessions
     return false; 
 });
+Broadcast::channel('restaurant.{restaurantId}.alerts', function ($user, $restaurantId) {
+    return (int) $user->restaurant_id === (int) $restaurantId;
+});

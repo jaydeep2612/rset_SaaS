@@ -7,8 +7,10 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Order;
 use App\Models\OrderStatusLog;
+use App\Models\RestaurantTable; // 🔥 Added Table Model
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use App\Events\OrderStatusUpdated;
 
 class WaiterAppController extends Controller
 {
@@ -49,31 +51,32 @@ class WaiterAppController extends Controller
         ]);
     }
 
-    // 2. Get Ready Orders
+  // 2. Get Ready Orders (Updated to include all active orders and missing fields)
     public function getReadyOrders(Request $request)
     {
         $user = $request->user();
 
-        $orders = Order::with(['items', 'table', 'session'])
+        // 🔥 FIX: Include 'items.menuItem' so the frontend can display the food names
+        $orders = Order::with(['items.menuItem', 'table', 'session'])
             ->where('restaurant_id', $user->restaurant_id)
-            ->where('status', 'ready') // Only fetch orders ready to be served
-            ->orderBy('updated_at', 'asc') // Oldest ready first
+            // Fetch all active order states so Waiter sees them immediately
+            ->whereIn('status', ['pending', 'placed', 'preparing', 'ready']) 
+            ->orderBy('updated_at', 'asc')
             ->get()
             ->map(function ($order) {
-                // Calculate total items
-                $totalItems = $order->items->sum('quantity');
-                
-                // Extract unique notes for the kitchen note section
+                // Extract unique notes
                 $notes = $order->items->whereNotNull('notes')->pluck('notes')->filter()->implode(', ');
 
                 return [
                     'id' => $order->id,
-                    'table_number' => $order->table ? $order->table->table_number : 'Takeaway',
+                    'status' => $order->status,             // 🔥 CRITICAL FIX: Frontend needs this to filter
+                    'updated_at' => $order->updated_at,     // 🔥 CRITICAL FIX: Frontend needs this to sort/show time
+                    'items' => $order->items,               // 🔥 CRITICAL FIX: Frontend needs this to list the food
+                    'table' => $order->table,               // 🔥 CRITICAL FIX: Frontend needs this for Table Number
+                    'table_number' => $order->table ? ($order->table->number ?? $order->table->table_number) : 'Takeaway',
                     'customer_name' => $order->customer_name ?? 'Guest',
-                    'total_items' => $totalItems,
-                    'notes' => $notes ?: null,
-                    'wait_time' => $order->updated_at->diffInMinutes(now()), // Minutes since it was marked ready
-                    'ready_since' => $order->updated_at->format('H:i'),
+                    'total_items' => $order->items->sum('quantity'),
+                    'notes' => $notes ?: $order->notes,
                 ];
             });
 
@@ -103,6 +106,51 @@ class WaiterAppController extends Controller
             'changed_by' => $user->id, // Who served it
         ]);
 
+        // 🔥 FIX: Broadcast the event so the Customer App updates instantly!
+        event(new OrderStatusUpdated($order));
+
         return response()->json(['message' => 'Order marked as served successfully.']);
+    }
+
+    // 🔥 4. GET ALL TABLES (Added missing method)
+    public function getTables(Request $request)
+    {
+        $user = $request->user();
+
+        $tables = RestaurantTable::where('restaurant_id', $user->restaurant_id)
+            ->get()
+            ->map(function ($table) {
+                return [
+                    'id' => $table->id,
+                    'number' => $table->number ?? $table->table_number, // Map table number safely
+                    'status' => $table->status ?? 'available',
+                    'capacity' => $table->seating_capacity ?? 4,
+                ];
+            });
+
+        return response()->json($tables);
+    }
+
+    // 🔥 5. UPDATE TABLE STATUS (Added missing method)
+    public function updateTableStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|string|in:available,occupied,cleaning'
+        ]);
+
+        $user = $request->user();
+
+        $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)
+            ->findOrFail($id);
+
+        $table->update(['status' => $request->status]);
+
+        // Broadcast the change instantly to all other waiter tablets
+        event(new \App\Events\TableStatusUpdated($table->id, $table->status, $table->restaurant_id));
+
+        return response()->json([
+            'message' => 'Table status updated', 
+            'table' => $table
+        ]);
     }
 }
